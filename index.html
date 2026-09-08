@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Bill Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#22303C;
+    --paper:#EDEAE3;
+    --paper-raised:#F5F3EE;
+    --line:#CFC9BC;
+    --amber:#C9862A;
+    --amber-bg:#F7E9D2;
+    --green:#3F6B4F;
+    --green-bg:#DFEAE1;
+    --rust:#A6402C;
+    --rust-bg:#F3DED8;
+    --muted:#6B7480;
+    --radius:2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:48px 24px 96px;}
+
+  header.masthead{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:20px;margin-bottom:32px;
+    flex-wrap:wrap;gap:12px;
+  }
+  header.masthead h1{
+    font-family:'Source Serif 4',serif;
+    font-weight:700;
+    font-size:2.1rem;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  header.masthead .date{
+    font-size:0.85rem;color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* Summary ledger strip */
+  .summary{
+    display:flex;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    margin-bottom:36px;
+    overflow-x:auto;
+  }
+  .summary .item{
+    flex:1;min-width:150px;
+    padding:18px 20px;
+    border-right:1px solid var(--line);
+  }
+  .summary .item:last-child{border-right:none;}
+  .summary .item .num{
+    font-family:'Source Serif 4',serif;
+    font-size:1.6rem;font-weight:600;
+    display:block;
+  }
+  .summary .item .lbl{
+    font-size:0.8rem;color:var(--muted);margin-top:2px;display:block;
+  }
+  .summary .item.overdue .num{color:var(--rust);}
+  .summary .item.soon .num{color:var(--amber);}
+  .summary .item.paid .num{color:var(--green);}
+
+  .toolbar{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;flex-wrap:wrap;gap:10px;
+  }
+  .toolbar h2{
+    font-family:'Source Serif 4',serif;font-size:1.2rem;margin:0;font-weight:600;
+  }
+  button{
+    font-family:'Inter',sans-serif;
+    cursor:pointer;border:1px solid var(--ink);
+    background:var(--ink);color:var(--paper);
+    padding:9px 16px;font-size:0.88rem;font-weight:500;
+    border-radius:var(--radius);
+  }
+  button.ghost{
+    background:transparent;color:var(--ink);border:1px solid var(--line);
+  }
+  button.small{padding:5px 10px;font-size:0.78rem;}
+  button.link{
+    background:none;border:none;color:var(--muted);text-decoration:underline;padding:2px 4px;font-size:0.8rem;
+  }
+  button:hover{opacity:0.85;}
+
+  table.ledger{
+    width:100%;border-collapse:collapse;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    margin-bottom:36px;
+  }
+  table.ledger thead th{
+    text-align:left;font-weight:500;font-size:0.78rem;color:var(--muted);
+    padding:10px 14px;border-bottom:1px solid var(--line);
+  }
+  table.ledger tbody tr{border-bottom:1px solid var(--line);}
+  table.ledger tbody tr:last-child{border-bottom:none;}
+  table.ledger tbody tr.is-paid{opacity:0.5;}
+  table.ledger td{padding:12px 14px;font-size:0.92rem;vertical-align:middle;}
+  td.name{font-weight:600;}
+  td.name .cat{display:block;font-weight:400;font-size:0.76rem;color:var(--muted);margin-top:2px;}
+  td.amount{font-variant-numeric:tabular-nums;text-align:right;font-weight:600;}
+  td.due{font-variant-numeric:tabular-nums;color:var(--muted);}
+  .tag{
+    display:inline-block;padding:2px 9px;border-radius:999px;font-size:0.74rem;font-weight:600;
+  }
+  .tag.overdue{background:var(--rust-bg);color:var(--rust);}
+  .tag.soon{background:var(--amber-bg);color:var(--amber);}
+  .tag.upcoming{background:#E4E7EA;color:var(--muted);}
+  .tag.paid{background:var(--green-bg);color:var(--green);}
+  td.actions{white-space:nowrap;text-align:right;}
+  td.actions button{margin-left:6px;}
+
+  .empty{
+    text-align:center;padding:48px 20px;color:var(--muted);
+    border:1px dashed var(--line);background:var(--paper-raised);margin-bottom:36px;
+  }
+  .empty p{margin:6px 0;}
+
+  dialog{
+    border:1px solid var(--ink);border-radius:var(--radius);padding:0;
+    width:min(460px,90vw);
+  }
+  dialog::backdrop{background:rgba(34,48,60,0.35);}
+  .dialog-inner{padding:26px;}
+  .dialog-inner h3{font-family:'Source Serif 4',serif;margin:0 0 18px;font-size:1.2rem;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:0.8rem;color:var(--muted);margin-bottom:5px;}
+  .field input,.field select{
+    width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius);
+    font-family:'Inter',sans-serif;font-size:0.92rem;background:#fff;color:var(--ink);
+  }
+  .field-row{display:flex;gap:12px;}
+  .field-row .field{flex:1;}
+  .dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;}
+
+  details.settings{
+    border:1px solid var(--line);background:var(--paper-raised);padding:16px 20px;margin-bottom:24px;
+  }
+  details.settings summary{cursor:pointer;font-size:0.85rem;color:var(--muted);}
+  details.settings .field{margin-top:14px;}
+  details.settings p.hint{font-size:0.78rem;color:var(--muted);line-height:1.5;}
+  .sync-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+
+  footer.note{margin-top:12px;font-size:0.78rem;color:var(--muted);text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>Ledger</h1>
+    <span class="date" id="todayLabel"></span>
+  </header>
+
+  <div class="summary" id="summaryStrip"></div>
+
+  <details class="settings">
+    <summary>Sync with GitHub (optional — enables automatic email reminders)</summary>
+    <p class="hint">
+      By default your bills are saved only in this browser (localStorage). To get automatic email
+      reminders even when this page is closed, connect a GitHub repo below — this page will read/write
+      <code>bills.json</code> in that repo, and the included GitHub Action will check it daily and email you.
+      See the README for full setup steps. Your token is stored only in this browser's localStorage.
+    </p>
+    <div class="field-row">
+      <div class="field"><label>GitHub username / org</label><input id="ghOwner" placeholder="e.g. johndoe"></div>
+      <div class="field"><label>Repo name</label><input id="ghRepo" placeholder="e.g. bill-dashboard"></div>
+    </div>
+    <div class="field"><label>Personal access token (repo scope)</label><input id="ghToken" type="password" placeholder="ghp_..."></div>
+    <div class="sync-row">
+      <button class="ghost small" onclick="saveGhSettings()">Save settings</button>
+      <button class="ghost small" onclick="loadFromGitHub()">Load from GitHub</button>
+      <button class="small" onclick="saveToGitHub()">Push to GitHub</button>
+      <span id="syncStatus" style="font-size:0.78rem;color:var(--muted);align-self:center;"></span>
+    </div>
+  </details>
+
+  <div class="toolbar">
+    <h2>Bills &amp; invoices</h2>
+    <button onclick="openDialog()">+ Add bill</button>
+  </div>
+
+  <table class="ledger" id="ledgerTable">
+    <thead>
+      <tr><th>Bill</th><th>Status</th><th style="text-align:right;">Amount</th><th>Due</th><th></th></tr>
+    </thead>
+    <tbody id="ledgerBody"></tbody>
+  </table>
+
+  <div class="empty" id="emptyState" style="display:none;">
+    <p><strong>No bills yet.</strong></p>
+    <p>Add your first bill to start tracking what's paid and what's due.</p>
+  </div>
+
+  <footer class="note">Data is stored in your browser. Use the sync panel above if you want it backed up to GitHub and reminded by email.</footer>
+</div>
+
+<dialog id="billDialog">
+  <div class="dialog-inner">
+    <h3 id="dialogTitle">Add bill</h3>
+    <input type="hidden" id="billId">
+    <div class="field"><label>Name</label><input id="fName" placeholder="e.g. Electricity"></div>
+    <div class="field-row">
+      <div class="field"><label>Amount</label><input id="fAmount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Due date</label><input id="fDue" type="date"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Category</label><input id="fCategory" placeholder="e.g. Utilities"></div>
+      <div class="field"><label>Repeats</label>
+        <select id="fRecurring">
+          <option value="none">One-time</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="ghost" onclick="closeDialog()">Cancel</button>
+      <button onclick="saveBill()">Save</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const STORAGE_KEY = 'ledger_bills_v1';
+const GH_KEY = 'ledger_gh_settings_v1';
+
+function loadBills(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
+}
+function persistBills(bills){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(bills, null, 2));
+}
+let bills = loadBills();
+
+function uid(){ return 'b_' + Math.random().toString(36).slice(2,10); }
+
+function daysUntil(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(dateStr + 'T00:00:00');
+  return Math.round((due - today) / 86400000);
+}
+
+function statusOf(bill){
+  if(bill.paid) return 'paid';
+  const d = daysUntil(bill.due);
+  if(d < 0) return 'overdue';
+  if(d <= 7) return 'soon';
+  return 'upcoming';
+}
+
+function fmtMoney(n){
+  return '$' + Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtDate(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+}
+
+function render(){
+  document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  // sort: overdue first, then soon, then upcoming, then paid; each by due date
+  const order = {overdue:0, soon:1, upcoming:2, paid:3};
+  const sorted = [...bills].sort((a,b)=>{
+    const sa = statusOf(a), sb = statusOf(b);
+    if(order[sa] !== order[sb]) return order[sa]-order[sb];
+    return new Date(a.due) - new Date(b.due);
+  });
+
+  const body = document.getElementById('ledgerBody');
+  body.innerHTML = '';
+  document.getElementById('emptyState').style.display = bills.length === 0 ? 'block' : 'none';
+
+  sorted.forEach(bill=>{
+    const st = statusOf(bill);
+    const tr = document.createElement('tr');
+    if(bill.paid) tr.className = 'is-paid';
+    const tagLabel = {overdue:'Overdue', soon:'Due soon', upcoming:'Upcoming', paid:'Paid'}[st];
+    tr.innerHTML = `
+      <td class="name">${escapeHtml(bill.name)}${bill.category ? `<span class="cat">${escapeHtml(bill.category)}${bill.recurring!=='none' ? ' · '+bill.recurring : ''}</span>`:''}</td>
+      <td><span class="tag ${st}">${tagLabel}</span></td>
+      <td class="amount">${fmtMoney(bill.amount)}</td>
+      <td class="due">${fmtDate(bill.due)}</td>
+      <td class="actions">
+        <button class="ghost small" onclick="togglePaid('${bill.id}')">${bill.paid ? 'Mark unpaid' : 'Mark paid'}</button>
+        <button class="ghost small" onclick="editBill('${bill.id}')">Edit</button>
+        <button class="link" onclick="deleteBill('${bill.id}')">Delete</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+
+  renderSummary();
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function renderSummary(){
+  const now = new Date();
+  const paidThisMonth = bills.filter(b=>{
+    if(!b.paid || !b.paidOn) return false;
+    const p = new Date(b.paidOn);
+    return p.getMonth()===now.getMonth() && p.getFullYear()===now.getFullYear();
+  });
+  const overdue = bills.filter(b=>!b.paid && statusOf(b)==='overdue');
+  const soon = bills.filter(b=>!b.paid && statusOf(b)==='soon');
+
+  const sum = arr => arr.reduce((s,b)=>s+Number(b.amount||0),0);
+
+  const strip = document.getElementById('summaryStrip');
+  strip.innerHTML = `
+    <div class="item paid"><span class="num">${fmtMoney(sum(paidThisMonth))}</span><span class="lbl">Paid this month (${paidThisMonth.length})</span></div>
+    <div class="item soon"><span class="num">${fmtMoney(sum(soon))}</span><span class="lbl">Due within 7 days (${soon.length})</span></div>
+    <div class="item overdue"><span class="num">${fmtMoney(sum(overdue))}</span><span class="lbl">Overdue (${overdue.length})</span></div>
+  `;
+}
+
+function togglePaid(id){
+  const bill = bills.find(b=>b.id===id);
+  if(!bill) return;
+  bill.paid = !bill.paid;
+  bill.paidOn = bill.paid ? new Date().toISOString().slice(0,10) : null;
+
+  // spawn next occurrence if recurring and just marked paid
+  if(bill.paid && bill.recurring !== 'none'){
+    const next = {...bill, id: uid(), paid:false, paidOn:null};
+    const d = new Date(bill.due + 'T00:00:00');
+    if(bill.recurring === 'monthly') d.setMonth(d.getMonth()+1);
+    if(bill.recurring === 'yearly') d.setFullYear(d.getFullYear()+1);
+    next.due = d.toISOString().slice(0,10);
+    bills.push(next);
+  }
+  persistBills(bills);
+  render();
+}
+
+function deleteBill(id){
+  if(!confirm('Delete this bill?')) return;
+  bills = bills.filter(b=>b.id!==id);
+  persistBills(bills);
+  render();
+}
+
+function editBill(id){
+  const bill = bills.find(b=>b.id===id);
+  if(!bill) return;
+  document.getElementById('dialogTitle').textContent = 'Edit bill';
+  document.getElementById('billId').value = bill.id;
+  document.getElementById('fName').value = bill.name;
+  document.getElementById('fAmount').value = bill.amount;
+  document.getElementById('fDue').value = bill.due;
+  document.getElementById('fCategory').value = bill.category || '';
+  document.getElementById('fRecurring').value = bill.recurring || 'none';
+  document.getElementById('billDialog').showModal();
+}
+
+function openDialog(){
+  document.getElementById('dialogTitle').textContent = 'Add bill';
+  document.getElementById('billId').value = '';
+  document.getElementById('fName').value = '';
+  document.getElementById('fAmount').value = '';
+  document.getElementById('fDue').value = new Date().toISOString().slice(0,10);
+  document.getElementById('fCategory').value = '';
+  document.getElementById('fRecurring').value = 'none';
+  document.getElementById('billDialog').showModal();
+}
+function closeDialog(){ document.getElementById('billDialog').close(); }
+
+function saveBill(){
+  const name = document.getElementById('fName').value.trim();
+  const amount = parseFloat(document.getElementById('fAmount').value);
+  const due = document.getElementById('fDue').value;
+  const category = document.getElementById('fCategory').value.trim();
+  const recurring = document.getElementById('fRecurring').value;
+  const id = document.getElementById('billId').value;
+
+  if(!name || isNaN(amount) || !due){
+    alert('Please fill in name, amount, and due date.');
+    return;
+  }
+
+  if(id){
+    const bill = bills.find(b=>b.id===id);
+    Object.assign(bill, {name, amount, due, category, recurring});
+  } else {
+    bills.push({id: uid(), name, amount, due, category, recurring, paid:false, paidOn:null});
+  }
+  persistBills(bills);
+  closeDialog();
+  render();
+}
+
+/* ---------- GitHub sync (optional) ---------- */
+function loadGhSettings(){
+  try{ return JSON.parse(localStorage.getItem(GH_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveGhSettings(){
+  const owner = document.getElementById('ghOwner').value.trim();
+  const repo = document.getElementById('ghRepo').value.trim();
+  const token = document.getElementById('ghToken').value.trim();
+  localStorage.setItem(GH_KEY, JSON.stringify({owner, repo, token}));
+  setSyncStatus('Settings saved locally.');
+}
+function fillGhFields(){
+  const s = loadGhSettings();
+  if(s.owner) document.getElementById('ghOwner').value = s.owner;
+  if(s.repo) document.getElementById('ghRepo').value = s.repo;
+  if(s.token) document.getElementById('ghToken').value = s.token;
+}
+function setSyncStatus(msg){
+  document.getElementById('syncStatus').textContent = msg;
+}
+
+async function loadFromGitHub(){
+  const {owner, repo, token} = loadGhSettings();
+  if(!owner || !repo || !token){ setSyncStatus('Fill in and save GitHub settings first.'); return; }
+  setSyncStatus('Loading…');
+  try{
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/bills.json`, {
+      headers: { Authorization: `token ${token}` }
+    });
+    if(!res.ok) throw new Error('GitHub returned ' + res.status);
+    const data = await res.json();
+    const content = JSON.parse(atob(data.content));
+    bills = content;
+    persistBills(bills);
+    render();
+    setSyncStatus('Loaded from GitHub.');
+  }catch(e){
+    setSyncStatus('Load failed: ' + e.message);
+  }
+}
+
+async function saveToGitHub(){
+  const {owner, repo, token} = loadGhSettings();
+  if(!owner || !repo || !token){ setSyncStatus('Fill in and save GitHub settings first.'); return; }
+  setSyncStatus('Pushing…');
+  try{
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/bills.json`;
+    let sha;
+    const existing = await fetch(apiUrl, { headers: { Authorization: `token ${token}` } });
+    if(existing.ok){ sha = (await existing.json()).sha; }
+
+    const body = {
+      message: 'Update bills.json from dashboard',
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(bills, null, 2)))),
+      ...(sha ? {sha} : {})
+    };
+    const res = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error('GitHub returned ' + res.status);
+    setSyncStatus('Pushed to GitHub — reminders will use this data.');
+  }catch(e){
+    setSyncStatus('Push failed: ' + e.message);
+  }
+}
+
+fillGhFields();
+render();
+</script>
+</body>
+</html>

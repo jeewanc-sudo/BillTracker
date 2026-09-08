@@ -1,0 +1,12 @@
+{
+  "name": "bill-dashboard-reminders",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily email reminder script for the Ledger bill dashboard",
+  "scripts": {
+    "remind": "node scripts/send_reminders.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.14"
+  }
+}
