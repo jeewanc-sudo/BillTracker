@@ -6,6 +6,7 @@
 <title>Ledger — Bill Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --ink:#22303C;
@@ -30,12 +31,12 @@
     line-height:1.5;
     min-height:100vh;
   }
-  .wrap{max-width:920px;margin:0 auto;padding:48px 24px 96px;}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
 
   header.masthead{
     display:flex;justify-content:space-between;align-items:flex-end;
     border-bottom:2px solid var(--ink);
-    padding-bottom:20px;margin-bottom:32px;
+    padding-bottom:20px;margin-bottom:20px;
     flex-wrap:wrap;gap:12px;
   }
   header.masthead h1{
@@ -50,12 +51,20 @@
     font-variant-numeric:tabular-nums;
   }
 
+  .alert-banner{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--rust-bg);color:var(--rust);
+    border:1px solid var(--rust);
+    padding:10px 16px;margin-bottom:20px;font-size:0.85rem;font-weight:500;
+  }
+  .alert-banner button{background:none;border:none;color:var(--rust);text-decoration:underline;font-weight:600;cursor:pointer;padding:0;font-size:0.85rem;}
+
   /* Summary ledger strip */
   .summary{
     display:flex;
     border:1px solid var(--line);
     background:var(--paper-raised);
-    margin-bottom:36px;
+    margin-bottom:28px;
     overflow-x:auto;
   }
   .summary .item{
@@ -73,8 +82,41 @@
     font-size:0.8rem;color:var(--muted);margin-top:2px;display:block;
   }
   .summary .item.overdue .num{color:var(--rust);}
-  .summary .item.soon .num{color:var(--amber);}
+  .summary .item.unpaid .num{color:var(--amber);}
   .summary .item.paid .num{color:var(--green);}
+
+  /* Chart section */
+  .chart-section{
+    border:1px solid var(--line);background:var(--paper-raised);
+    padding:20px 22px 8px;margin-bottom:32px;
+  }
+  .chart-section h2{
+    font-family:'Source Serif 4',serif;font-size:1.15rem;margin:0 0 4px;font-weight:600;
+  }
+  .chart-section p.sub{font-size:0.8rem;color:var(--muted);margin:0 0 14px;}
+  .chart-canvas-wrap{height:280px;}
+
+  /* Month navigator */
+  .month-nav{
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;
+    justify-content:space-between;
+  }
+  .month-nav .nav-left{display:flex;align-items:center;gap:8px;}
+  .month-nav .month-label{
+    font-family:'Source Serif 4',serif;font-size:1.15rem;font-weight:600;min-width:170px;
+  }
+  .icon-btn{
+    background:transparent;border:1px solid var(--line);color:var(--ink);
+    width:32px;height:32px;padding:0;border-radius:var(--radius);
+    font-size:1rem;line-height:1;
+  }
+  .view-toggle{display:flex;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .view-toggle button{
+    border:none;background:var(--paper-raised);color:var(--muted);
+    padding:7px 14px;font-size:0.82rem;border-right:1px solid var(--line);
+  }
+  .view-toggle button:last-child{border-right:none;}
+  .view-toggle button.active{background:var(--ink);color:var(--paper);}
 
   .toolbar{
     display:flex;justify-content:space-between;align-items:center;
@@ -169,7 +211,15 @@
     <span class="date" id="todayLabel"></span>
   </header>
 
+  <div class="alert-banner" id="alertBanner" style="display:none;"></div>
+
   <div class="summary" id="summaryStrip"></div>
+
+  <div class="chart-section">
+    <h2>Invoices by month, by payee</h2>
+    <p class="sub">Total invoiced each month, broken down by who it's paid to.</p>
+    <div class="chart-canvas-wrap"><canvas id="payeeChart"></canvas></div>
+  </div>
 
   <details class="settings">
     <summary>Sync with GitHub (optional — enables automatic email reminders)</summary>
@@ -192,6 +242,19 @@
     </div>
   </details>
 
+  <div class="month-nav">
+    <div class="nav-left">
+      <button class="icon-btn" onclick="shiftMonth(-1)" title="Previous month">‹</button>
+      <span class="month-label" id="monthLabel"></span>
+      <button class="icon-btn" onclick="shiftMonth(1)" title="Next month">›</button>
+      <button class="ghost small" onclick="goToCurrentMonth()">This month</button>
+    </div>
+    <div class="view-toggle" id="viewToggle">
+      <button data-mode="month" class="active" onclick="setViewMode('month')">Selected month</button>
+      <button data-mode="all" onclick="setViewMode('all')">All bills</button>
+    </div>
+  </div>
+
   <div class="toolbar">
     <h2>Bills &amp; invoices</h2>
     <button onclick="openDialog()">+ Add bill</button>
@@ -205,8 +268,8 @@
   </table>
 
   <div class="empty" id="emptyState" style="display:none;">
-    <p><strong>No bills yet.</strong></p>
-    <p>Add your first bill to start tracking what's paid and what's due.</p>
+    <p><strong>No bills here.</strong></p>
+    <p id="emptyStateSub">Add your first bill to start tracking what's paid and what's due.</p>
   </div>
 
   <footer class="note">Data is stored in your browser. Use the sync panel above if you want it backed up to GitHub and reminded by email.</footer>
@@ -222,7 +285,7 @@
       <div class="field"><label>Due date</label><input id="fDue" type="date"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Category</label><input id="fCategory" placeholder="e.g. Utilities"></div>
+      <div class="field"><label>Payee</label><input id="fPayee" placeholder="e.g. City Power &amp; Light"></div>
       <div class="field"><label>Repeats</label>
         <select id="fRecurring">
           <option value="none">One-time</option>
@@ -243,12 +306,23 @@ const STORAGE_KEY = 'ledger_bills_v1';
 const GH_KEY = 'ledger_gh_settings_v1';
 
 function loadBills(){
-  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ return []; }
+  let raw;
+  try{ raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }catch(e){ raw = []; }
+  // migrate old records that used "category" instead of "payee"
+  return raw.map(b => ({ ...b, payee: b.payee || b.category || '' }));
 }
 function persistBills(bills){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(bills, null, 2));
 }
 let bills = loadBills();
+
+// view state
+const now = new Date();
+let viewYear = now.getFullYear();
+let viewMonth = now.getMonth(); // 0-indexed
+let viewMode = 'month'; // 'month' | 'all'
+
+let chartInstance = null;
 
 function uid(){ return 'b_' + Math.random().toString(36).slice(2,10); }
 
@@ -273,13 +347,53 @@ function fmtDate(dateStr){
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 }
+function monthKey(dateStr){
+  return dateStr.slice(0,7); // "YYYY-MM"
+}
+function monthLabelFor(year, month){
+  return new Date(year, month, 1).toLocaleDateString(undefined,{month:'long', year:'numeric'});
+}
+
+function billsInViewedMonth(){
+  const key = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  return bills.filter(b => monthKey(b.due) === key);
+}
+
+function setViewMode(mode){
+  viewMode = mode;
+  document.querySelectorAll('#viewToggle button').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  render();
+}
+
+function shiftMonth(delta){
+  viewMonth += delta;
+  if(viewMonth < 0){ viewMonth = 11; viewYear--; }
+  if(viewMonth > 11){ viewMonth = 0; viewYear++; }
+  if(viewMode !== 'month') setViewMode('month'); else render();
+}
+function goToCurrentMonth(){
+  const n = new Date();
+  viewYear = n.getFullYear();
+  viewMonth = n.getMonth();
+  setViewMode('month');
+}
+function jumpToAll(){
+  setViewMode('all');
+}
 
 function render(){
   document.getElementById('todayLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  document.getElementById('monthLabel').textContent = monthLabelFor(viewYear, viewMonth);
+
+  renderAlertBanner();
+
+  const visibleBills = viewMode === 'month' ? billsInViewedMonth() : [...bills];
 
   // sort: overdue first, then soon, then upcoming, then paid; each by due date
   const order = {overdue:0, soon:1, upcoming:2, paid:3};
-  const sorted = [...bills].sort((a,b)=>{
+  const sorted = [...visibleBills].sort((a,b)=>{
     const sa = statusOf(a), sb = statusOf(b);
     if(order[sa] !== order[sb]) return order[sa]-order[sb];
     return new Date(a.due) - new Date(b.due);
@@ -287,7 +401,10 @@ function render(){
 
   const body = document.getElementById('ledgerBody');
   body.innerHTML = '';
-  document.getElementById('emptyState').style.display = bills.length === 0 ? 'block' : 'none';
+  document.getElementById('emptyState').style.display = visibleBills.length === 0 ? 'block' : 'none';
+  document.getElementById('emptyStateSub').textContent = viewMode === 'month'
+    ? `No bills due in ${monthLabelFor(viewYear, viewMonth)}.`
+    : `Add your first bill to start tracking what's paid and what's due.`;
 
   sorted.forEach(bill=>{
     const st = statusOf(bill);
@@ -295,7 +412,7 @@ function render(){
     if(bill.paid) tr.className = 'is-paid';
     const tagLabel = {overdue:'Overdue', soon:'Due soon', upcoming:'Upcoming', paid:'Paid'}[st];
     tr.innerHTML = `
-      <td class="name">${escapeHtml(bill.name)}${bill.category ? `<span class="cat">${escapeHtml(bill.category)}${bill.recurring!=='none' ? ' · '+bill.recurring : ''}</span>`:''}</td>
+      <td class="name">${escapeHtml(bill.name)}${bill.payee ? `<span class="cat">${escapeHtml(bill.payee)}${bill.recurring!=='none' ? ' · '+bill.recurring : ''}</span>`:''}</td>
       <td><span class="tag ${st}">${tagLabel}</span></td>
       <td class="amount">${fmtMoney(bill.amount)}</td>
       <td class="due">${fmtDate(bill.due)}</td>
@@ -308,31 +425,99 @@ function render(){
     body.appendChild(tr);
   });
 
-  renderSummary();
+  renderSummary(visibleBills);
+  renderChart();
 }
 
 function escapeHtml(s){
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
 }
 
-function renderSummary(){
-  const now = new Date();
-  const paidThisMonth = bills.filter(b=>{
-    if(!b.paid || !b.paidOn) return false;
-    const p = new Date(b.paidOn);
-    return p.getMonth()===now.getMonth() && p.getFullYear()===now.getFullYear();
-  });
+function renderAlertBanner(){
   const overdue = bills.filter(b=>!b.paid && statusOf(b)==='overdue');
-  const soon = bills.filter(b=>!b.paid && statusOf(b)==='soon');
+  const banner = document.getElementById('alertBanner');
+  if(overdue.length === 0){ banner.style.display = 'none'; return; }
+  const total = overdue.reduce((s,b)=>s+Number(b.amount||0),0);
+  banner.style.display = 'flex';
+  banner.innerHTML = `<span>${overdue.length} bill(s) overdue, totaling ${fmtMoney(total)}, across all months.</span>
+    <button onclick="jumpToAll()">View all overdue</button>`;
+}
+
+function renderSummary(visibleBills){
+  const paid = visibleBills.filter(b=>b.paid);
+  const unpaid = visibleBills.filter(b=>!b.paid);
+  const overdue = visibleBills.filter(b=>!b.paid && statusOf(b)==='overdue');
 
   const sum = arr => arr.reduce((s,b)=>s+Number(b.amount||0),0);
+  const scopeLabel = viewMode === 'month' ? monthLabelFor(viewYear, viewMonth) : 'all time';
 
   const strip = document.getElementById('summaryStrip');
   strip.innerHTML = `
-    <div class="item paid"><span class="num">${fmtMoney(sum(paidThisMonth))}</span><span class="lbl">Paid this month (${paidThisMonth.length})</span></div>
-    <div class="item soon"><span class="num">${fmtMoney(sum(soon))}</span><span class="lbl">Due within 7 days (${soon.length})</span></div>
-    <div class="item overdue"><span class="num">${fmtMoney(sum(overdue))}</span><span class="lbl">Overdue (${overdue.length})</span></div>
+    <div class="item paid"><span class="num">${fmtMoney(sum(paid))}</span><span class="lbl">Paid — ${scopeLabel} (${paid.length})</span></div>
+    <div class="item unpaid"><span class="num">${fmtMoney(sum(unpaid))}</span><span class="lbl">Unpaid — ${scopeLabel} (${unpaid.length})</span></div>
+    <div class="item overdue"><span class="num">${fmtMoney(sum(overdue))}</span><span class="lbl">Overdue — ${scopeLabel} (${overdue.length})</span></div>
   `;
+}
+
+const PALETTE = ['#C9862A','#3F6B4F','#A6402C','#2E6E73','#6B4C6B','#8C6D1F','#55606B','#7A8B5E'];
+
+function renderChart(){
+  const canvas = document.getElementById('payeeChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  if(bills.length === 0){
+    if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+
+  // build last 12 months ending at the currently viewed month
+  const months = [];
+  for(let i=11;i>=0;i--){
+    const d = new Date(viewYear, viewMonth - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleDateString(undefined,{month:'short', year:'2-digit'}) });
+  }
+
+  const payees = [...new Set(bills.map(b => b.payee || 'Uncategorized'))];
+
+  const totalsByPayeeMonth = {};
+  payees.forEach(p => totalsByPayeeMonth[p] = months.map(()=>0));
+
+  bills.forEach(b=>{
+    const key = monthKey(b.due);
+    const idx = months.findIndex(m => m.key === key);
+    if(idx === -1) return;
+    const p = b.payee || 'Uncategorized';
+    totalsByPayeeMonth[p][idx] += Number(b.amount || 0);
+  });
+
+  const datasets = payees.map((p, i) => ({
+    label: p,
+    data: totalsByPayeeMonth[p],
+    backgroundColor: PALETTE[i % PALETTE.length],
+    borderRadius: 2,
+  }));
+
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels: months.map(m=>m.label), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display:false }, ticks: { color: '#6B7480', font:{family:'Inter'} } },
+        y: { stacked: true, grid: { color:'#DAD5C9' }, ticks: { color:'#6B7480', font:{family:'Inter'}, callback: v => '$'+v } }
+      },
+      plugins: {
+        legend: { position:'bottom', labels:{ color:'#22303C', font:{family:'Inter', size:11}, boxWidth:12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${fmtMoney(ctx.raw)}`
+          }
+        }
+      }
+    }
+  });
 }
 
 function togglePaid(id){
@@ -369,7 +554,7 @@ function editBill(id){
   document.getElementById('fName').value = bill.name;
   document.getElementById('fAmount').value = bill.amount;
   document.getElementById('fDue').value = bill.due;
-  document.getElementById('fCategory').value = bill.category || '';
+  document.getElementById('fPayee').value = bill.payee || '';
   document.getElementById('fRecurring').value = bill.recurring || 'none';
   document.getElementById('billDialog').showModal();
 }
@@ -379,8 +564,12 @@ function openDialog(){
   document.getElementById('billId').value = '';
   document.getElementById('fName').value = '';
   document.getElementById('fAmount').value = '';
-  document.getElementById('fDue').value = new Date().toISOString().slice(0,10);
-  document.getElementById('fCategory').value = '';
+  // default the due date into whichever month is currently being viewed
+  const defaultDate = viewMode === 'month'
+    ? new Date(viewYear, viewMonth, Math.min(now.getDate(),28))
+    : new Date();
+  document.getElementById('fDue').value = defaultDate.toISOString().slice(0,10);
+  document.getElementById('fPayee').value = '';
   document.getElementById('fRecurring').value = 'none';
   document.getElementById('billDialog').showModal();
 }
@@ -390,7 +579,7 @@ function saveBill(){
   const name = document.getElementById('fName').value.trim();
   const amount = parseFloat(document.getElementById('fAmount').value);
   const due = document.getElementById('fDue').value;
-  const category = document.getElementById('fCategory').value.trim();
+  const payee = document.getElementById('fPayee').value.trim();
   const recurring = document.getElementById('fRecurring').value;
   const id = document.getElementById('billId').value;
 
@@ -401,9 +590,9 @@ function saveBill(){
 
   if(id){
     const bill = bills.find(b=>b.id===id);
-    Object.assign(bill, {name, amount, due, category, recurring});
+    Object.assign(bill, {name, amount, due, payee, recurring});
   } else {
-    bills.push({id: uid(), name, amount, due, category, recurring, paid:false, paidOn:null});
+    bills.push({id: uid(), name, amount, due, payee, recurring, paid:false, paidOn:null});
   }
   persistBills(bills);
   closeDialog();
@@ -442,7 +631,7 @@ async function loadFromGitHub(){
     if(!res.ok) throw new Error('GitHub returned ' + res.status);
     const data = await res.json();
     const content = JSON.parse(atob(data.content));
-    bills = content;
+    bills = content.map(b => ({ ...b, payee: b.payee || b.category || '' }));
     persistBills(bills);
     render();
     setSyncStatus('Loaded from GitHub.');

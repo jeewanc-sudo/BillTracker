@@ -101,7 +101,7 @@ anywhere except directly to GitHub's API.
     "name": "Electricity",
     "amount": 84.50,
     "due": "2026-09-15",
-    "category": "Utilities",
+    "payee": "City Power & Light",
     "recurring": "monthly",
     "paid": false,
     "paidOn": null
@@ -110,4 +110,18 @@ anywhere except directly to GitHub's API.
 ```
 
 `recurring` is one of `none`, `monthly`, `yearly`. Marking a recurring bill as
-paid in the dashboard automatically creates the next occurrence.
+paid in the dashboard automatically creates the next occurrence, so future
+months populate themselves.
+
+## Viewing bills by month
+
+The dashboard opens on the current month by default. Use the `‹` / `›`
+arrows to step through previous or future months, or "This month" to jump
+back to today. Switch to the "All bills" tab to see every bill regardless of
+month — useful for finding something far in the past or future. An overdue
+banner (if anything is overdue) is always visible across every view, with a
+shortcut to jump straight to "All bills".
+
+The "Invoices by month, by payee" chart always shows the trailing 12 months
+ending at whichever month you're currently viewing, stacked by payee, so you
+can see spending patterns shift over time.
